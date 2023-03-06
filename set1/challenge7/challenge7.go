@@ -8,9 +8,44 @@ import (
 	"log"
 )
 
+type Block struct {
+  // This block is from [Start, End) in the original data.
+  Start, End int
+  // The block of data.
+  Bytes []byte
+}
+
+// Splits the data into blocks of size blockSize.
+// The last block will be smaller than blockSize if len(data) is not divisible
+// by blockSize -- this function does not pad the last block.
+func Blocks(data []byte, blockSize int) []Block {
+  start, end := 0, blockSize
+  var result []Block
+  for {
+    if end >= len(data) {
+      result = append(result, Block{
+        Start: start,
+        End: end,
+        Bytes: data[start:],
+      })
+      break
+    }
+    
+    result = append(result, Block{
+        Start: start,
+        End: end,
+        Bytes: data[start:end],
+      })
+
+    start += blockSize
+    end += blockSize
+  }
+  return result
+}
+
 // https://stackoverflow.com/questions/24072026/golang-aes-ecb-encryption
 // https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Electronic_Codebook_.28ECB.29
-func DecryptAESWithECB(data, key []byte) ([]byte, error) {
+func DecryptAESWithECB(ciphertext, key []byte) ([]byte, error) {
 	// The crypto/aes package will choose AES-128 if the key is 16 bytes long,
 	// AES-192 if the key is 24 bytes long, or AES-256 if the key is 32 bytes
 	// long. See https://pkg.go.dev/crypto/aes#NewCipher.
@@ -18,15 +53,12 @@ func DecryptAESWithECB(data, key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	decrypted := make([]byte, len(data))
+	
+	decrypted := make([]byte, len(ciphertext))
 
-	// It looks like AES uses a block size of 16 bytes for ECB mode, though
-	// I can't find a clear link, just multiple stackoverflow posts etc. Or
-	// maybe the ECB block size is whatever the key length is.
-	ecbBlockSizeBytes := 16
-
-	for bs, be := 0, ecbBlockSizeBytes; bs < len(data); bs, be = bs+ecbBlockSizeBytes, be+ecbBlockSizeBytes {
-		cipher.Decrypt(decrypted[bs:be], data[bs:be])
+	// QUESTION: Does ECB block size have to be the length of the key?
+	for _, b := range Blocks(ciphertext, len(key)) {
+		cipher.Decrypt(decrypted[b.Start:b.End], ciphertext[b.Start:b.End])
 	}
 
 	return decrypted, nil
